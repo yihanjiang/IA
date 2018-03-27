@@ -31,7 +31,7 @@ def get_args():
     parser.add_argument('-code_symbol', type=int, default=2)   # only valid when random_int is chosen
     parser.add_argument('-num_epoch',type=int, default=400)
 
-    parser.add_argument('-batch_size',type=int, default=10)
+    parser.add_argument('-batch_size',type=int, default=100)
 
     parser.add_argument('-act_hidden', choices = ['linear', 'relu','elu', 'tanh', 'sigmoid'], default='linear')
     parser.add_argument('-act_output', choices = ['linear', 'relu','elu', 'tanh', 'sigmoid'], default='linear')
