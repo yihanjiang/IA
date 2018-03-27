@@ -12,6 +12,7 @@ from keras.constraints import Constraint
 from keras.optimizers import Adam, SGD
 from keras.callbacks import LearningRateScheduler
 
+from utils import MultiInputLayer, errors,stack
 
 
 def get_args():
@@ -19,6 +20,8 @@ def get_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-num_user', type=int, default=3)
+    parser.add_argument('-input_block_len', type=int, default=1)
+    parser.add_argument('-output_block_len', type=int, default=1)
 
     parser.add_argument('-random_H', choices = ['random', 'random_int', 'random_diag', 'not', 'zero_diag'], default='random')
     parser.add_argument('-random_U', choices = ['random', 'random_int', 'random_diag', 'not', 'zero_diag'], default='random')
@@ -30,121 +33,74 @@ def get_args():
 
     parser.add_argument('-noise_sigma',type=float, default=0.000)
 
+    parser.add_argument('-num_layer', type=int, default=1)
+    parser.add_argument('-pre_code', type=int, default=1)
+    parser.add_argument('-is_bias',  type=int, default=1)
+
     args = parser.parse_args()
     return args
 
 
-class MyLayer(Layer):
-    def __init__(self, output_dim, use_bias = True, activation=None, **kwargs):
-        self.output_dim = output_dim
-        super(MyLayer, self).__init__(**kwargs)
-
-        self.activation = keras.activations.get(activation)
-        self.use_bias   = use_bias
-
-    def build(self, input_shape):
-        # Create a trainable weight variable for this layer.
-        self.kernel = self.add_weight(name='kernel',
-                                      shape=(1, self.output_dim),
-                                      initializer='glorot_uniform',
-                                      trainable=True)
-
-        self.bias   = self.add_weight(name='bias',
-                                      shape=(self.output_dim,),
-                                      initializer='glorot_uniform',
-                                      trainable=True)
-        super(MyLayer, self).build(input_shape)  # Be sure to call this somewhere!
-
-    def call(self, x):
-        output = tf.multiply(x, self.kernel)
-
-        if self.use_bias:
-            output = K.bias_add(output, self.bias)
-
-        if self.activation is not None:
-            output = self.activation(output)
-
-        return output
-
-    def compute_output_shape(self, input_shape):
-        return (input_shape[0], self.output_dim)
-
-
-class YourLayer(Layer):
-    def __init__(self, output_dim, use_bias = True, activation=None, **kwargs):
-        self.output_dim = output_dim
-        super(YourLayer, self).__init__(**kwargs)
-
-        self.activation = keras.activations.get(activation)
-        self.use_bias   = use_bias
-
-    def build(self, input_shape):
-        # Create a trainable weight variable for this layer.
-        self.kernel = self.add_weight(name='kernel',
-                                      shape=(self.output_dim, 2),
-                                      initializer='glorot_uniform',
-                                      trainable=True)
-
-        self.bias   = self.add_weight(name='bias',
-                                      shape=(self.output_dim,),
-                                      initializer='glorot_uniform',
-                                      trainable=True)
-        super(YourLayer, self).build(input_shape)  # Be sure to call this somewhere!
-
-    def call(self, x):
-        output = tf.multiply(x, self.kernel)
-        output =tf.reduce_sum(output, axis = 2)
-
-        if self.use_bias:
-            output = K.bias_add(output, self.bias)
-
-        if self.activation is not None:
-            output = self.activation(output)
-
-        return output
-
-    def compute_output_shape(self, input_shape):
-        return (input_shape[0], self.output_dim)
-
-
-def clip(x):
-    return K.clip(x, min_value=-2.0, max_value=2.0)
-
-
-def errors(y_true, y_pred):
-    myOtherTensor = K.not_equal(y_true, K.round(y_pred))
-    return K.mean(tf.cast(myOtherTensor, tf.float32))
-
-def stack(args):
-    s1, s2 = args
-    return tf.stack([s1, s2], axis=2)
-
-
-def build_model(num_user, H, U, W, noise_sigma):
+def build_model(args, H_list, U_list, W_list):
 
     def H_channel(x):
-        HH = K.variable(H)
-        return K.dot(x, HH) + noise_sigma*tf.random_normal(tf.shape(x),dtype=tf.float32, mean=0., stddev=1.0)
+        res_list = []
+        for idx in range(len(H_list)):
+            HH = K.variable(H_list[idx])
+            xx = x[:, :, idx]
+            tmp = tf.matmul(xx,HH)  + args.noise_sigma*tf.random_normal(tf.shape(xx),dtype=tf.float32, mean=0., stddev=1.0)
+            res_list.append(tmp)
+
+        res = tf.stack(res_list)
+        res = tf.transpose(res, perm=[1, 2,0])
+        return res
 
     def U_channel(x):
-        UU = K.variable(U)
-        return K.dot(x, UU) + noise_sigma*tf.random_normal(tf.shape(x),dtype=tf.float32, mean=0., stddev=1.0)
+        res_list = []
+        for idx in range(len(U_list)):
+            UU = K.variable(U_list[idx])
+            xx = x[:, :, idx]
+            tmp = tf.matmul(xx,UU)  + args.noise_sigma*tf.random_normal(tf.shape(xx),dtype=tf.float32, mean=0., stddev=1.0)
+            res_list.append(tmp)
 
+        res = tf.stack(res_list)
+        res = tf.transpose(res, perm=[1, 2,0])
+        return res
 
     def W_channel(x):
-        WW = K.variable(W)
-        return K.dot(x, WW) + noise_sigma*tf.random_normal(tf.shape(x),dtype=tf.float32, mean=0., stddev=1.0)
+        res_list = []
+        for idx in range(len(W_list)):
+            WW = K.variable(W_list[idx])
+            xx = x[:, :, idx]
+            tmp = tf.matmul(xx,WW)  + args.noise_sigma*tf.random_normal(tf.shape(xx),dtype=tf.float32, mean=0., stddev=1.0)
+            res_list.append(tmp)
 
+        res = tf.stack(res_list)
+        res = tf.transpose(res, perm=[1, 2,0])
+        return res
+
+    # def H_channel(x):
+    #     HH = K.variable(H)
+    #     return K.dot(x, HH) + args.noise_sigma*tf.random_normal(tf.shape(x),dtype=tf.float32, mean=0., stddev=1.0)
+
+    # def U_channel(x):
+    #     UU = K.variable(U)
+    #     return K.dot(x, UU) + args.noise_sigma*tf.random_normal(tf.shape(x),dtype=tf.float32, mean=0., stddev=1.0)
+    #
+    # def W_channel(x):
+    #     WW = K.variable(W)
+    #     return K.dot(x, WW) + args.noise_sigma*tf.random_normal(tf.shape(x),dtype=tf.float32, mean=0., stddev=1.0)
 
 
     act = 'linear'
     output_act = 'linear'
 
-    inputs = Input(shape = (num_user,))
+    inputs = Input(shape = (args.num_user, args.input_block_len))
     x = inputs
 
     # 1st Forward
-    s_output = MyLayer(num_user, activation=output_act, name ='S_enc_1')(x)
+
+    s_output = MultiInputLayer(args.output_block_len, activation=output_act, name ='S_enc_1')(x)
 
     # 1st Backward
     d_received_1 = Lambda(H_channel, name = '1st_Forward_channel')(s_output)

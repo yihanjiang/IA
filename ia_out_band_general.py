@@ -60,7 +60,7 @@ def build_model(args, H_list, G_list):
         for idx in range(len(H_list)):
             HH = K.variable(H_list[idx])
             xx = x[:, :, idx]
-            tmp = tf.matmul(xx,HH)  + + noise_sigma*tf.random_normal(tf.shape(xx),dtype=tf.float32, mean=0., stddev=1.0)
+            tmp = tf.matmul(xx,HH)  +  noise_sigma*tf.random_normal(tf.shape(xx),dtype=tf.float32, mean=0., stddev=1.0)
             res_list.append(tmp)
 
         res = tf.stack(res_list)
@@ -72,7 +72,7 @@ def build_model(args, H_list, G_list):
         for idx in range(len(G_list)):
             GG = K.variable(G_list[idx])
             xx = x[:, :, idx]
-            tmp = tf.matmul(xx,GG)  + + noise_sigma*tf.random_normal(tf.shape(xx),dtype=tf.float32, mean=0., stddev=1.0)
+            tmp = tf.matmul(xx,GG)  +  noise_sigma*tf.random_normal(tf.shape(xx),dtype=tf.float32, mean=0., stddev=1.0)
             res_list.append(tmp)
 
         res = tf.stack(res_list)
