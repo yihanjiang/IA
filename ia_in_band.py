@@ -1,22 +1,20 @@
 __author__ = 'yihanjiang'
 import numpy as np
+import argparse
+import math
+
 import tensorflow as tf
 import keras
-import math
 from keras import backend as K
-from keras.engine.topology import Layer
 from keras.layers import Input, Dense, Reshape, Flatten, Embedding, Dropout
 from keras.layers import BatchNormalization, Lambda
 from keras.models import Sequential, Model
-from keras.constraints import Constraint
 from keras.optimizers import Adam, SGD
-from keras.callbacks import LearningRateScheduler
 
 from utils import MultiInputLayer, errors,stack
 
 
 def get_args():
-    import argparse
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-num_user', type=int, default=3)
@@ -79,31 +77,28 @@ def build_model(args, H_list, U_list, W_list):
         res = tf.transpose(res, perm=[1, 2,0])
         return res
 
-    act = 'linear'
     output_act = 'linear'
 
     inputs = Input(shape = (args.num_user, args.input_block_len))
-    x = inputs
 
     # 1st Forward
     if args.pre_code:
-        s_output = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act, name ='S_enc_1')(x)
+        s_output = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act, name ='S_enc_1')(inputs)
     else:
-        s_output = x
-
+        s_output = inputs
 
     d_received_1 = Lambda(H_channel, name = '1st_Forward_channel')(s_output)
     s_received   = Lambda(U_channel, name = '1st_Source_channel')(s_output)
-    s_pre        = keras.layers.Concatenate(axis=2)([inputs,s_received ])
+    s_pre        = keras.layers.Concatenate(axis=2)([inputs,s_received])
 
-    # 1st Backward
+    # 2nd Forward
     s_output     = MultiInputLayer(args.output_block_len, use_bias=args.is_bias, activation=output_act, name ='S_enc_2')(s_pre)
 
     d_received_2 = Lambda(H_channel, name = '2nd_Forward_channel')(s_output)
     d_enc_1      = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act, name ='D_enc_1')(d_received_1)
     d_enc_rec_1  = Lambda(W_channel, name = '2nd_Dest_channel')(d_enc_1)
 
-    D_final      = keras.layers.Concatenate(axis=2)([d_enc_rec_1,d_received_2 ])
+    D_final      = keras.layers.Concatenate(axis=2)([d_enc_rec_1,d_received_2])
     t_output     = MultiInputLayer(args.input_block_len, use_bias=args.is_bias,activation=output_act, name ='final')(D_final)
 
     return Model(inputs, t_output)
@@ -112,27 +107,22 @@ def main():
     args = get_args()
     print args
 
-
     H_list, U_list, W_list = [], [], []
 
-    num_user = args.num_user
-    block_len = args.input_block_len  # input
-    code_len  = args.output_block_len  # code
-
     if args.random_H == 'random_same':
-        H_matrix = np.random.normal(0, 1.0, size = (num_user, num_user))
-        U_matrix = np.random.normal(0, 1.0, size = (num_user, num_user))
-        W_matrix = np.random.normal(0, 1.0, size = (num_user, num_user))
+        H_matrix = np.random.normal(0, 1.0, size = (args.num_user, args.num_user))
+        U_matrix = np.random.normal(0, 1.0, size = (args.num_user, args.num_user))
+        W_matrix = np.random.normal(0, 1.0, size = (args.num_user, args.num_user))
 
-        for idx in range(code_len):
+        for idx in range(args.output_block_len):
             H_list.append(H_matrix)
             U_list.append(U_matrix)
             W_list.append(W_matrix)
     else:
-        for idx in range(code_len):
-            H_matrix = np.random.normal(0, 1.0, size = (num_user, num_user))
-            U_matrix = np.random.normal(0, 1.0, size = (num_user, num_user))
-            W_matrix = np.random.normal(0, 1.0, size = (num_user, num_user))
+        for idx in range(args.output_block_len):
+            H_matrix = np.random.normal(0, 1.0, size = (args.num_user, args.num_user))
+            U_matrix = np.random.normal(0, 1.0, size = (args.num_user, args.num_user))
+            W_matrix = np.random.normal(0, 1.0, size = (args.num_user, args.num_user))
             H_list.append(H_matrix)
             U_list.append(U_matrix)
             W_list.append(W_matrix)
@@ -162,17 +152,17 @@ def main():
     num_block_test  = args.num_block/10
 
     if args.random_code == 'random_int':
-        message_train  = np.random.randint(0,args.code_symbol, size = (num_block_train, num_user, block_len))
-        message_test   = np.random.randint(0,args.code_symbol, size = (num_block_test, num_user, block_len))
+        message_train  = np.random.randint(0,args.code_symbol, size = (num_block_train, args.num_user, args.input_block_len))
+        message_test   = np.random.randint(0,args.code_symbol, size = (num_block_test, args.num_user, args.input_block_len))
     elif args.random_code == 'random':
-        message_train = np.random.normal(0, 1, size = (num_block_train, num_user, block_len))
-        message_test = np.random.normal(0, 1, size = (num_block_train, num_user, block_len))
+        message_train = np.random.normal(0, 1, size = (num_block_train, args.num_user, args.input_block_len))
+        message_test = np.random.normal(0, 1, size = (num_block_train, args.num_user, args.input_block_len))
 
 
     model.fit(message_train, message_train,
               validation_data=(message_test, message_test), batch_size=args.batch_size, epochs=args.num_epoch)
 
-    #model.save('./tmp/test_noisy.h5')
+    model.save('./tmp/test_inband.h5')
 
 if __name__ == '__main__':
     main()

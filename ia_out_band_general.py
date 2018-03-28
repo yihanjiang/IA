@@ -1,5 +1,6 @@
 __author__ = 'yihanjiang'
 import numpy as np
+import argparse
 import tensorflow as tf
 import keras
 import math
@@ -15,7 +16,6 @@ from keras.callbacks import LearningRateScheduler
 from utils import MultiInputLayer, errors, stack
 
 def get_args():
-    import argparse
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-num_user', type=int, default=3)
@@ -50,9 +50,9 @@ def get_args():
 def build_model(args, H_list, G_list):
 
     noise_sigma = args.noise_sigma
-    act        = args.act_hidden
-    output_act = args.act_output
-    use_bias   =  args.is_bias
+    act         = args.act_hidden
+    output_act  = args.act_output
+    use_bias      =  args.is_bias
     is_pre_coding = args.pre_code
 
     def H_channel(x):
@@ -81,13 +81,12 @@ def build_model(args, H_list, G_list):
 
 
     inputs = Input(shape = (args.num_user, args.input_block_len))
-    x = inputs
 
     # 1st Forward
     if is_pre_coding:
-        s_sent          = MultiInputLayer(args.output_block_len, use_bias=use_bias, activation=output_act,  name ='S_enc_1')(x)
+        s_sent          = MultiInputLayer(args.output_block_len, use_bias=use_bias, activation=output_act,  name ='S_enc_1')(inputs)
     else:
-        s_sent = x
+        s_sent = inputs
 
     d_received      = Lambda(H_channel, name = '1st_H_Channel')(s_sent)
 

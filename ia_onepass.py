@@ -4,13 +4,10 @@ import tensorflow as tf
 import keras
 import math
 from keras import backend as K
-from keras.engine.topology import Layer
-from keras.layers import Input, Dense, Reshape, Flatten, Embedding, Dropout, Conv1D
+from keras.layers import Input
 from keras.layers import BatchNormalization, Lambda
 from keras.models import Sequential, Model
-from keras.constraints import Constraint
 from keras.optimizers import Adam, SGD
-from keras.callbacks import LearningRateScheduler
 
 from utils import MultiInputLayer, errors, stack
 
@@ -67,68 +64,25 @@ def build_model(args, H_list):
     x = inputs
 
     for idx in range(args.num_enc_layer-1):
-        x          = MultiInputLayer(args.num_hidden_unit, use_bias=args.use_bias, activation=args.act_hidden,
+        x          = MultiInputLayer(args.num_hidden_unit, use_bias=args.is_bias, activation=args.act_hidden,
                                      name ='S_enc_'+str(idx+1))(x)
         if args.use_bn == 1:
             x = BatchNormalization()(x)
-    s_sent     = MultiInputLayer(args.output_block_len, use_bias=args.use_bias, activation=args.act_output,
+    s_sent     = MultiInputLayer(args.output_block_len, use_bias=args.is_bias, activation=args.act_output,
                                  name ='S_enc_'+str(args.num_enc_layer))(x)
 
     d_received      = Lambda(H_channel, name = '1st_H_Channel')(s_sent)
     x          = d_received
 
     for jdx in range(args.num_dec_layer-1):
-        x          = MultiInputLayer(args.num_hidden_unit, use_bias=args.use_bias, activation=args.act_hidden,
+        x          = MultiInputLayer(args.num_hidden_unit, use_bias=args.is_bias, activation=args.act_hidden,
                                      name ='D_enc_'+ str(jdx+1))(x)
         if args.use_bn == 1:
             x = BatchNormalization()(x)
-    final      = MultiInputLayer(args.input_block_len, use_bias=args.use_bias, activation=args.act_output,
+    final      = MultiInputLayer(args.input_block_len, use_bias=args.is_bias, activation=args.act_output,
                                  name ='D_enc_' + str(args.num_dec_layer))(x)
 
     return Model(inputs, final)
-
-
-def build_model(num_user, block_len, code_len,  H_list, noise_sigma, is_pre_code = False,
-                is_bias = False, act_hidden = 'linear', act_output = 'linear', num_enc_layer = 1, num_dec_layer = 1):
-
-    use_bn = 1
-
-    def H_channel(x):
-        res_list = []
-        for idx in range(len(H_list)):
-            HH = K.variable(H_list[idx])
-            xx = x[:, :, idx]
-            tmp = tf.matmul(xx,HH)  + + noise_sigma*tf.random_normal(tf.shape(xx),dtype=tf.float32, mean=0., stddev=1.0)
-            res_list.append(tmp)
-
-        res = tf.stack(res_list)
-        res = tf.transpose(res, perm=[1, 2,0])
-        return res
-
-    act        = act_hidden
-    output_act = act_output
-    use_bias   =  is_bias
-
-    inputs = Input(shape = (num_user, block_len))
-    x = inputs
-
-    for idx in range(num_enc_layer-1):
-        x          = MultiInputLayer(code_len, use_bias=use_bias, activation=act,  name ='S_enc_'+str(idx+1))(x)
-        if use_bn == 1:
-            x = BatchNormalization()(x)
-    s_sent     = MultiInputLayer(code_len, use_bias=use_bias, activation=output_act,  name ='S_enc_'+str(num_enc_layer))(x)
-
-    d_received      = Lambda(H_channel, name = '1st_H_Channel')(s_sent)
-    x          = d_received
-
-    for jdx in range(num_dec_layer-1):
-        x          = MultiInputLayer(code_len, use_bias=use_bias, activation=act, name ='D_enc_'+ str(jdx+1))(x)
-        if use_bn == 1:
-            x = BatchNormalization()(x)
-    final      = MultiInputLayer(block_len, use_bias=use_bias, activation=output_act, name ='D_enc_' + str(num_dec_layer))(x)
-
-    return Model(inputs, final)
-
 
 
 def main():
@@ -170,18 +124,8 @@ def main():
     learning_rate = 0.001
     optimizer = Adam(learning_rate)
 
-    if args.is_bias == 1:
-        is_bias = True
-    else:
-        is_bias = False
+    model = build_model(args, H_list)
 
-
-    model = build_model(num_user,block_len=block_len, code_len=code_len, H_list = H_list, noise_sigma = args.noise_sigma,
-                        is_bias=is_bias,
-                        act_hidden = args.act_hidden, act_output = args.act_output,
-                        num_dec_layer=args.num_dec_layer, num_enc_layer=args.num_enc_layer)
-
-      #'binary_crossentropy'
     if args.random_code == 'random_int':
         loss = 'binary_crossentropy'
         model.compile(loss=loss, optimizer=optimizer, metrics=[errors])
