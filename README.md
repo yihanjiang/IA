@@ -11,9 +11,9 @@ First Checkin: 03/24/2018, Yihan Jiang
 
  
 # Main Result:
-(1) out-band: up-to 6 users with bias/precode. upto 4 without bias/precode. Matches theory.
-(2) in-band:  TBD  
-(3) onepass:  TBD
+ (1) out-band: up-to 6 users with bias/precode. upto 4 without bias/precode. Matches theory.
+ (2) in-band:  upto 4 user without bias/precode. Matches theory.
+ (3) onepass:  TBD
  
 # TBD:
 (1) support time/frequency/MIMO diversity.
