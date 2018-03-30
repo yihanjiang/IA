@@ -27,7 +27,7 @@ def get_args():
     parser.add_argument('-random_H', choices = ['random', 'random_int', 'random_diag', 'random_same',
                                                 'not', 'zero_diag', 'default'], default='random')
     parser.add_argument('-G_mode', choices = ['random', 'H.T'], default='H.T')
-    parser.add_argument('-random_code', choices = ['random', 'random_int'], default='random')
+    parser.add_argument('-random_code', choices = ['random', 'random_int', 'random_uniform'], default='random')
     parser.add_argument('-code_symbol', type=int, default=2)   # only valid when random_int is chosen
     parser.add_argument('-num_epoch',type=int, default=400)
 
@@ -181,11 +181,16 @@ def main():
     num_block_test  = args.num_block/10
 
     if args.random_code == 'random_int':
-        message_train  = np.random.randint(0,args.code_symbol, size = (num_block_train, num_user, block_len))
-        message_test   = np.random.randint(0,args.code_symbol, size = (num_block_test, num_user, block_len))
+        message_train  = np.random.randint(0,args.code_symbol, size = (num_block_train, args.num_user, args.input_block_len))
+        message_test   = np.random.randint(0,args.code_symbol, size = (num_block_test, args.num_user, args.input_block_len))
     elif args.random_code == 'random':
-        message_train = np.random.normal(0, args.signal_sigma, size = (num_block_train, num_user, block_len))
-        message_test = np.random.normal(0, args.signal_sigma, size = (num_block_train, num_user, block_len))
+        message_train = np.random.normal(0, args.signal_sigma, size = (num_block_train, args.num_user, args.input_block_len))
+        message_test = np.random.normal(0, args.signal_sigma, size = (num_block_train, args.num_user, args.input_block_len))
+    elif args.random_code == 'random_uniform':
+        message_train = np.random.uniform(low=-args.signal_sigma, high=args.signal_sigma,
+                                          size = (num_block_train, args.num_user, args.input_block_len))
+        message_test  = np.random.uniform(low=-args.signal_sigma, high=args.signal_sigma,
+                                          size = (num_block_train, args.num_user, args.input_block_len))
 
     def scheduler(epoch):
 

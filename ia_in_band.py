@@ -23,7 +23,7 @@ def get_args():
     parser.add_argument('-num_block', type=int, default=10000)
 
     parser.add_argument('-random_H', choices = ['random', 'random_same', 'random_diag', 'not', 'zero_diag'], default='random_same')
-    parser.add_argument('-random_code', choices = ['random', 'random_int'], default='random')
+    parser.add_argument('-random_code', choices = ['random', 'random_int', 'random_uniform'], default='random')
     parser.add_argument('-code_symbol', type=int, default=2)   # only valid when random_int is chosen
     parser.add_argument('-num_epoch',type=int, default=400)
 
@@ -157,8 +157,11 @@ def main():
     elif args.random_code == 'random':
         message_train = np.random.normal(0, 1, size = (num_block_train, args.num_user, args.input_block_len))
         message_test = np.random.normal(0, 1, size = (num_block_train, args.num_user, args.input_block_len))
-
-
+    elif args.random_code == 'random_uniform':
+        message_train = np.random.uniform(low=-args.signal_sigma, high=args.signal_sigma,
+                                          size = (num_block_train, args.num_user, args.input_block_len))
+        message_test  = np.random.uniform(low=-args.signal_sigma, high=args.signal_sigma,
+                                          size = (num_block_train, args.num_user, args.input_block_len))
     model.fit(message_train, message_train,
               validation_data=(message_test, message_test), batch_size=args.batch_size, epochs=args.num_epoch)
 
