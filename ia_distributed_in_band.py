@@ -32,7 +32,11 @@ def get_args():
     parser.add_argument('-batch_size',type=int, default=100)
 
     parser.add_argument('-num_layer', type=int, default=1)
-    parser.add_argument('-pre_code', type=int, default=1)
+    parser.add_argument('-num_hidden_unit', type=int, default=100)
+    parser.add_argument('-act_hidden', choices = ['linear', 'relu', 'selu','tanh', 'sigmoid'], default='linear')
+
+
+    parser.add_argument('-pre_code', type=int, default=1)   # 2 is seperate source/forward pre_code, 1 is not seperated
     parser.add_argument('-is_bias',  type=int, default=1)
 
     args = parser.parse_args()
@@ -81,7 +85,7 @@ def build_model(args, H_list, U_list, W_list):
         return res
 
     output_act = 'linear'
-
+    args.act_hidden
     # inputs
     input_list = [None for _ in range(args.num_user)]
     for idx in range(args.num_user):
@@ -92,7 +96,7 @@ def build_model(args, H_list, U_list, W_list):
     for idx in range(args.num_user):
         x = input_list[idx]
         for ldx in range(args.num_layer -1):
-            x = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act,
+            x = MultiInputLayer(args.num_hidden_unit, use_bias=args.is_bias,activation=args.act_hidden,
                             name ='S_fwd1_'+ str(idx) +'_'+  str(ldx))(x)
         res_x = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act,
                             name ='S_fwd1_'+ str(idx) +'_'+  str(args.num_layer))(x)
@@ -100,18 +104,21 @@ def build_model(args, H_list, U_list, W_list):
 
     forward_code  = keras.layers.Concatenate(axis = 1)(forward_code_list)
 
-    # 1st round inward coding
-    inward_code_list = [None for _ in range(args.num_user)]
-    for idx in range(args.num_user):
-        x = input_list[idx]
-        for ldx in range(args.num_layer -1):
-            x = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act,
-                            name ='S_iwd1_'+ str(idx) +'_'+ str(ldx))(x)
-        res_x = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act,
-                            name ='S_iwd1_'+ str(idx) +'_'+ str(args.num_layer))(x)
-        inward_code_list[idx] = res_x
+    if args.pre_code ==1:
+        inward_code = forward_code
+    elif args.pre_code == 2:
+        # 1st round inward coding
+        inward_code_list = [None for _ in range(args.num_user)]
+        for idx in range(args.num_user):
+            x = input_list[idx]
+            for ldx in range(args.num_layer -1):
+                x = MultiInputLayer(args.num_hidden_unit, use_bias=args.is_bias,activation=args.act_hidden,
+                                name ='S_iwd1_'+ str(idx) +'_'+ str(ldx))(x)
+            res_x = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act,
+                                name ='S_iwd1_'+ str(idx) +'_'+ str(args.num_layer))(x)
+            inward_code_list[idx] = res_x
 
-    inward_code  = keras.layers.Concatenate(axis = 1)(inward_code_list)
+        inward_code  = keras.layers.Concatenate(axis = 1)(inward_code_list)
 
     # 1st round forward and inward channel
     d_forward_1st = Lambda(H_channel, name = '1st_Forward_channel')(forward_code)
@@ -120,9 +127,7 @@ def build_model(args, H_list, U_list, W_list):
     d_forward_1st_list = [None for _ in range(args.num_user)]
     s_inward_1st_list = [None for _ in range(args.num_user)]
     for idx in range(args.num_user):
-        #d_forward_1st_list[idx] = tf.expand_dims(d_forward_1st[:,idx, :], 1)
         d_forward_1st_list[idx]   = Lambda(tf_exp, arguments = {'idx':idx})(d_forward_1st)
-        #s_inward_1st_list[idx]  = tf.expand_dims(s_inward_1st[:,idx, :], 1)
         s_inward_1st_list[idx]   = Lambda(tf_exp, arguments = {'idx':idx})(s_inward_1st)
 
     # 2rd round forward coding
@@ -134,7 +139,7 @@ def build_model(args, H_list, U_list, W_list):
     for idx in range(args.num_user):
         x = input_2nd_round_list[idx]
         for ldx in range(args.num_layer -1):
-            x = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act,
+            x = MultiInputLayer(args.num_hidden_unit, use_bias=args.is_bias,activation=args.act_hidden,
                             name ='S_fwd2_'+ str(idx) +'_'+  str(ldx))(x)
         res_x = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act,
                             name ='S_fwd2_'+ str(idx) +'_'+  str(args.num_layer))(x)
@@ -148,7 +153,7 @@ def build_model(args, H_list, U_list, W_list):
     for idx in range(args.num_user):
         x = d_forward_1st_list[idx]
         for ldx in range(args.num_layer -1):
-            x = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act,
+            x = MultiInputLayer(args.num_hidden_unit, use_bias=args.is_bias,activation=args.act_hidden,
                             name ='S_owd2_'+  str(idx) +'_'+ str(ldx))(x)
         res_x = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act,
                             name ='S_owd2_'+  str(idx) +'_'+ str(args.num_layer))(x)
@@ -164,12 +169,13 @@ def build_model(args, H_list, U_list, W_list):
     output_list = [None for _ in range(args.num_user)]
     for idx in range(args.num_user):
         final   = Lambda(tf_exp, arguments = {'idx':idx})(D_final)
+        for ldx in range(args.num_layer -1):
+            final = MultiInputLayer(args.num_hidden_unit, use_bias=args.is_bias,activation=args.act_hidden,
+                            name ='final_'+  str(idx) +'_'+ str(ldx))(final)
+
         t_output= MultiInputLayer(args.input_block_len, use_bias=args.is_bias,
                                   activation=output_act, name ='final_'+str(idx))(final)
         output_list[idx] = t_output
-
-    print input_list
-    print output_list
 
     return Model(inputs=input_list, outputs=output_list)
 

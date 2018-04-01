@@ -32,7 +32,9 @@ def get_args():
     parser.add_argument('-batch_size',type=int, default=100)
 
     parser.add_argument('-num_layer', type=int, default=1)
-    parser.add_argument('-pre_code', type=int, default=1)
+    parser.add_argument('-pre_code', type=int, default=2)  # 1 for enable precode, 2 for diff source/inward precode
+    parser.add_argument('-post_code', type=int, default=1) # 1 can distinguish dest/forward, 0 is not
+
     parser.add_argument('-is_bias',  type=int, default=1)
 
     args = parser.parse_args()
@@ -83,12 +85,18 @@ def build_model(args, H_list, U_list, W_list):
 
     # 1st Forward
     if args.pre_code:
-        s_output = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act, name ='S_enc_1')(inputs)
+        if args.pre_code == 2:
+            s_output_fwd = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act, name ='S_fenc_1')(inputs)
+            s_output_iwd = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act, name ='S_ienc_1')(inputs)
+        else:
+            s_output_fwd = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act, name ='S_enc_1')(inputs)
+            s_output_iwd = s_output_fwd
     else:
-        s_output = inputs
+        s_output_fwd = inputs
+        s_output_iwd = inputs
 
-    d_received_1 = Lambda(H_channel, name = '1st_Forward_channel')(s_output)
-    s_received   = Lambda(U_channel, name = '1st_Source_channel')(s_output)
+    d_received_1 = Lambda(H_channel, name = '1st_Forward_channel')(s_output_fwd)
+    s_received   = Lambda(U_channel, name = '1st_Source_channel')(s_output_iwd)
     s_pre        = keras.layers.Concatenate(axis=2)([inputs,s_received])
 
     # 2nd Forward
@@ -98,7 +106,12 @@ def build_model(args, H_list, U_list, W_list):
     d_enc_1      = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act, name ='D_enc_1')(d_received_1)
     d_enc_rec_1  = Lambda(W_channel, name = '2nd_Dest_channel')(d_enc_1)
 
-    D_final      = keras.layers.Concatenate(axis=2)([d_enc_rec_1,d_received_2, d_received_1])
+    if args.post_code == 1:
+        D_final      = keras.layers.Concatenate(axis=2)([d_enc_rec_1,d_received_2, d_received_1])
+    else:
+        x = keras.layers.Add(axis = 2)([d_enc_rec_1,d_received_2])
+        D_final  = keras.layers.Concatenate(axis=2)([x, d_received_1])
+
     t_output     = MultiInputLayer(args.input_block_len, use_bias=args.is_bias,activation=output_act, name ='final')(D_final)
 
     return Model(inputs, t_output)
