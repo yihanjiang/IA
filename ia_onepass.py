@@ -19,6 +19,9 @@ def get_args():
 
     parser.add_argument('-num_block', type=int, default=100000)
 
+    parser.add_argument('-num_layer',  type=int, default=2)
+    parser.add_argument('-num_hidden_unit', type=int, default=100)
+
     parser.add_argument('-input_block_len', type=int, default=1)
     parser.add_argument('-output_block_len', type=int, default=1)
 
@@ -34,7 +37,7 @@ def get_args():
 
     parser.add_argument('-num_dec_layer',  type=int, default=1)
     parser.add_argument('-num_enc_layer',  type=int, default=1)
-    parser.add_argument('-num_hidden_unit', type=int, default=500)
+
     parser.add_argument('-act_hidden', choices = ['linear', 'relu', 'selu','tanh', 'sigmoid'], default='linear')
     parser.add_argument('-act_output', choices = ['linear', 'relu', 'selu','tanh', 'sigmoid'], default='linear')
     parser.add_argument('-use_bn', type=int, default=0)
@@ -64,7 +67,7 @@ def build_model(args, H_list):
             res_list.append(tmp)
 
         res = tf.stack(res_list)
-        res = tf.transpose(res, perm=[1, 2,0])
+        res = tf.transpose(res, perm=[1, 2, 0])
         return res
 
     inputs = Input(shape = (args.num_user, args.input_block_len))
@@ -74,7 +77,11 @@ def build_model(args, H_list):
 
     pre_encs = [None for idx in range(args.num_antenna)]
     for a_i in range(args.num_antenna):
-        pre_encs[a_i] = MultiInputLayer(args.output_block_len, use_bias=is_bias, activation=args.act_output,
+        for idx in range(args.num_layer-1):
+            x = MultiInputLayer(args.num_hidden_unit, use_bias=is_bias, activation=args.act_output,
+                                     name ='S_enc_'+str(a_i)+ '_'+str(idx))(x)
+
+        pre_encs[a_i] = MultiInputLayer(args.output_block_len, use_bias=is_bias, activation=args.act_hidden,
                                  name ='S_enc_'+str(a_i))(x)
 
     received = [[None for idx in range(args.num_antenna)] for jdx in range(args.num_antenna)]
@@ -91,6 +98,11 @@ def build_model(args, H_list):
         dec_data[a_i] = keras.layers.Add()([received[j][a_i] for j in range(args.num_antenna)])
 
     dec    = keras.layers.Concatenate(axis = 2)(dec_data)
+
+    for idx in range(args.num_layer-1):
+        dec = MultiInputLayer(args.num_hidden_unit, use_bias=is_bias, activation=args.act_hidden,
+                                     name ='D_enc_'+str(a_i)+ '_'+str(idx))(dec)
+
     final  = MultiInputLayer(args.input_block_len, use_bias=is_bias, activation=args.act_output,
                                  name ='D_enc_' + str(args.num_dec_layer))(dec)
 

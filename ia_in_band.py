@@ -98,7 +98,7 @@ def build_model(args, H_list, U_list, W_list):
     d_enc_1      = MultiInputLayer(args.output_block_len, use_bias=args.is_bias,activation=output_act, name ='D_enc_1')(d_received_1)
     d_enc_rec_1  = Lambda(W_channel, name = '2nd_Dest_channel')(d_enc_1)
 
-    D_final      = keras.layers.Concatenate(axis=2)([d_enc_rec_1,d_received_2])
+    D_final      = keras.layers.Concatenate(axis=2)([d_enc_rec_1,d_received_2, d_received_1])
     t_output     = MultiInputLayer(args.input_block_len, use_bias=args.is_bias,activation=output_act, name ='final')(D_final)
 
     return Model(inputs, t_output)
